@@ -4,6 +4,8 @@ import (
 	goContext "context"
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
+	"github.com/kataras/iris/v12/sessions"
 	"strings"
 	"time"
 
@@ -56,7 +58,7 @@ func NewHandler() *Handler {
 
 func (h *Handler) IsLogin() iris.Handler {
 	return func(ctx *context.Context) {
-		session := server.SessionMgr.Start(ctx)
+		session := sessions.Get(ctx)
 		loginUser := session.Get("profile")
 		if loginUser == nil {
 			ctx.StatusCode(iris.StatusOK)
@@ -76,11 +78,6 @@ func (h *Handler) IsLogin() iris.Handler {
 				return
 			}
 		} else {
-			if err := session.Man.ShiftExpiration(ctx); err != nil {
-				ctx.StatusCode(iris.StatusInternalServerError)
-				ctx.Values().Set("message", fmt.Errorf("shift expiration falied, err: %v", err))
-				return
-			}
 			ctx.StatusCode(iris.StatusOK)
 			ctx.Values().Set("data", loginUser != nil)
 		}
@@ -167,7 +164,12 @@ func (h *Handler) Login() iris.Handler {
 			ctx.Values().Set("token", token)
 			return
 		default:
-			session := server.SessionMgr.Start(ctx)
+			session := sessions.Get(ctx)
+			sId := ctx.GetCookie(server.SessionCookieName)
+			if sId != "" {
+				id, _ := uuid.NewRandom()
+				ctx.SetCookieKV(server.SessionCookieName, id.String())
+			}
 			session.Set("profile", profile)
 		}
 
@@ -260,7 +262,7 @@ func (h *Handler) Logout() iris.Handler {
 
 func (h *Handler) GetProfile() iris.Handler {
 	return func(ctx *context.Context) {
-		session := server.SessionMgr.Start(ctx)
+		session := sessions.Get(ctx)
 		loginUser := session.Get("profile")
 		if loginUser == nil {
 			ctx.StatusCode(iris.StatusUnauthorized)
